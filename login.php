@@ -20,7 +20,9 @@ if (isset($_POST['login'])) {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($user) {
-            if (password_verify($password, $user['password'])) {
+            echo 'Entered Password: ' . $password . '<br>';
+            echo 'Stored Hash: ' . $user['password'] . '<br>';
+            if ($password==$user['password']) {
                 $_SESSION['user_id'] = $user['customer_id'];
                 $_SESSION['user_name'] = $user['customer_name'];
                 header("Location: dashboard.php");

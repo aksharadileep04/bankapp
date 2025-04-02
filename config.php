@@ -1,8 +1,8 @@
 <?php
 $host = "127.0.0.1:3306";
-$dbname = "bankappdb";
+$dbname = "loansys";
 $username = "root";
-$password = "akshara";
+$password = "root";
 
 try {
     $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);

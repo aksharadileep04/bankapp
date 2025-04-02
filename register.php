@@ -9,49 +9,47 @@ $success_message = '';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
     // Sanitize inputs
-    $customer_id = trim($_POST['customer_id']);
     $branch_id = trim($_POST['branch_id']);
     $customer_name = trim($_POST['customer_name']);
     $username = trim($_POST['username']);
     $password = trim($_POST['password']);
     $confirm_password = trim($_POST['confirm_password']);
+    $city = trim($_POST['city']);
+    $country = trim($_POST['country']);
+    $street = trim($_POST['street']);
 
     // Validate inputs
-    if (empty($customer_id) || empty($branch_id) || empty($customer_name) || 
-        empty($username) || empty($password) || empty($confirm_password)) {
+    if (empty($branch_id) || empty($customer_name) || empty($username) || 
+        empty($password) || empty($confirm_password) || empty($city) || 
+        empty($country) || empty($street)) {
         $error_message = "❌ All fields are required!";
+    } elseif (!in_array($branch_id, ['1', '2', '3', '4', '5'])) {
+        $error_message = "❌ Please select a valid branch (1-5)!";
     } elseif ($password !== $confirm_password) {
         $error_message = "❌ Passwords do not match!";
     } elseif (strlen($password) < 8) {
         $error_message = "❌ Password must be at least 8 characters!";
     } else {
         try {
-            // Check if customer exists in database
-            $stmt = $conn->prepare("SELECT * FROM customer WHERE customer_id = ? AND branch_id = ?");
-            $stmt->execute([$customer_id, $branch_id]);
-            $customer = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$customer) {
-                $error_message = "❌ Invalid Customer ID or Branch ID!";
+            // Check if username is available
+            $stmt = $conn->prepare("SELECT * FROM customer WHERE username = ?");
+            $stmt->execute([$username]);
+            
+            if ($stmt->fetch()) {
+                $error_message = "❌ Username already taken!";
             } else {
-                // Check if username is available
-                $stmt = $conn->prepare("SELECT * FROM customer WHERE username = ?");
-                $stmt->execute([$username]);
+                // Hash password before storing
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 
-                if ($stmt->fetch()) {
-                    $error_message = "❌ Username already taken!";
+                // Insert new customer - let the database handle customer_id auto increment
+                $insertStmt = $conn->prepare("INSERT INTO customer (branch_id, customer_name, username, password, city, country, street) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                
+                if ($insertStmt->execute([$branch_id, $customer_name, $username, $hashed_password, $city, $country, $street])) {
+                    $_SESSION['success_message'] = "✅ Registration successful! Please login.";
+                    header("Location: login.php");
+                    exit;
                 } else {
-                    // Hash password before storing
-                    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                    $updateStmt = $conn->prepare("UPDATE customer SET customer_name = ?, username = ?, password = ? WHERE customer_id = ?");
-                    
-                    if ($updateStmt->execute([$customer_name, $username, $hashed_password, $customer_id])) {
-                        $_SESSION['success_message'] = "✅ Registration successful! Please login.";
-                        header("Location: login.php");
-                        exit;
-                    } else {
-                        $error_message = "⚠️ Registration failed. Please try again.";
-                    }
+                    $error_message = "⚠️ Registration failed. Please try again.";
                 }
             }
         } catch (PDOException $e) {
@@ -98,7 +96,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
             background: rgba(255, 255, 255, 0.98);
             border-radius: 15px;
             width: 100%;
-            max-width: 500px;
+            max-width: 600px;
             box-shadow: 0 10px 30px rgba(74, 111, 165, 0.15);
             overflow: hidden;
             border: 1px solid rgba(0, 0, 0, 0.1);
@@ -221,6 +219,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
             text-decoration: underline;
         }
         
+        .section-title {
+            font-family: 'Playfair Display', serif;
+            color: var(--primary-color);
+            margin-top: 15px;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        
         @media (max-width: 576px) {
             body {
                 background-size: 70%;
@@ -265,22 +272,48 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
             
             <form method="POST" id="registerForm">
                 <div class="row g-3">
-                    <div class="col-md-6">
-                        <label for="customer_id" class="form-label">Customer ID</label>
-                        <input type="text" class="form-control" id="customer_id" name="customer_id" required
-                               value="<?php echo isset($_POST['customer_id']) ? htmlspecialchars($_POST['customer_id']) : ''; ?>">
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <label for="branch_id" class="form-label">Branch ID</label>
-                        <input type="text" class="form-control" id="branch_id" name="branch_id" required
-                               value="<?php echo isset($_POST['branch_id']) ? htmlspecialchars($_POST['branch_id']) : ''; ?>">
+                    <div class="col-12">
+                        <label for="branch_id" class="form-label">Branch</label>
+                        <select class="form-select" id="branch_id" name="branch_id" required>
+                            <option value="" disabled selected>Select your branch</option>
+                            <option value="1" <?php echo (isset($_POST['branch_id']) && $_POST['branch_id'] == '1') ? 'selected' : ''; ?>>Branch 1</option>
+                            <option value="2" <?php echo (isset($_POST['branch_id']) && $_POST['branch_id'] == '2') ? 'selected' : ''; ?>>Branch 2</option>
+                            <option value="3" <?php echo (isset($_POST['branch_id']) && $_POST['branch_id'] == '3') ? 'selected' : ''; ?>>Branch 3</option>
+                            <option value="4" <?php echo (isset($_POST['branch_id']) && $_POST['branch_id'] == '4') ? 'selected' : ''; ?>>Branch 4</option>
+                            <option value="5" <?php echo (isset($_POST['branch_id']) && $_POST['branch_id'] == '5') ? 'selected' : ''; ?>>Branch 5</option>
+                        </select>
                     </div>
                     
                     <div class="col-12">
                         <label for="customer_name" class="form-label">Full Name</label>
                         <input type="text" class="form-control" id="customer_name" name="customer_name" required
                                value="<?php echo isset($_POST['customer_name']) ? htmlspecialchars($_POST['customer_name']) : ''; ?>">
+                    </div>
+                    
+                    <div class="col-12">
+                        <h5 class="section-title">Address Information</h5>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="street" class="form-label">Street Address</label>
+                        <input type="text" class="form-control" id="street" name="street" required
+                               value="<?php echo isset($_POST['street']) ? htmlspecialchars($_POST['street']) : ''; ?>">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="city" class="form-label">City</label>
+                        <input type="text" class="form-control" id="city" name="city" required
+                               value="<?php echo isset($_POST['city']) ? htmlspecialchars($_POST['city']) : ''; ?>">
+                    </div>
+                    
+                    <div class="col-12">
+                        <label for="country" class="form-label">Country</label>
+                        <input type="text" class="form-control" id="country" name="country" required
+                               value="<?php echo isset($_POST['country']) ? htmlspecialchars($_POST['country']) : ''; ?>">
+                    </div>
+                    
+                    <div class="col-12">
+                        <h5 class="section-title">Account Information</h5>
                     </div>
                     
                     <div class="col-12">
@@ -382,6 +415,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
                 // Check password length
                 if (passwordInput.value.length < 8) {
                     alert('Password must be at least 8 characters long');
+                    isValid = false;
+                }
+                
+                // Check branch selection
+                const branchSelect = document.getElementById('branch_id');
+                if (!branchSelect.value || !['1','2','3','4','5'].includes(branchSelect.value)) {
+                    alert('Please select a valid branch (1-5)');
                     isValid = false;
                 }
                 

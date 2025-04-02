@@ -1,19 +1,33 @@
 <?php
 require 'config.php';
+
 if (!isset($_GET['customer_id'])) {
     die("Customer ID is required.");
 }
 
 $customer_id = $_GET['customer_id'];
 
+// Fetch loan details
 $sql = "SELECT loan.*, employee.employee_name FROM loan 
-        JOIN employee ON loan.sanctioning_employee_id = employee.employee_id
+        JOIN employee ON loan.sanction_employee_id = employee.employee_id
         WHERE loan.customer_id = ?";
 $stmt = $conn->prepare($sql);
 $stmt->execute([$customer_id]);
 $loans = $stmt->fetchAll(PDO::FETCH_ASSOC);
-?>
 
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    foreach ($_POST['loans'] as $loan_id => $loan_data) {
+        $paid = $loan_data['paid'];
+        
+        // Now we only need to update the paid amount - the trigger will handle indebt
+        $updateSql = "UPDATE loan SET paid = ? WHERE loan_id = ?";
+        $updateStmt = $conn->prepare($updateSql);
+        $updateStmt->execute([$paid, $loan_id]);
+    }
+    header("Location: loan.php?customer_id=" . $customer_id);
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,134 +38,124 @@ $loans = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary-color: #1976d2;
-            --secondary-color: #64b5f6;
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
             --accent-color: #e3f2fd;
-            --light-bg: #f5fbff;
+            --background-color: #f8f9fa;
         }
-        
         body {
-            background: linear-gradient(rgba(245, 251, 255, 0.95), rgba(245, 251, 255, 0.97)),
-                        url('illustration-graphic-cartoon-character-of-loan-vector-removebg-preview.png');
-            background-size: 40%;
-            background-position: right 80px bottom 40px;
-            background-repeat: no-repeat;
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-color);
+            font-family: 'Poppins', sans-serif;
         }
-
         .loan-card {
-            background: white;
+            background: #fff;
             border-radius: 15px;
-            box-shadow: 0 8px 25px rgba(25, 118, 210, 0.1);
-            transition: all 0.3s ease;
-            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
             padding: 2rem;
+            transition: transform 0.3s ease-in-out;
         }
-
-        .loan-icon {
-            width: 60px;
-            height: 60px;
-            background-color: var(--accent-color);
-            color: var(--primary-color);
-            border-radius: 50%;
+        .loan-card:hover {
+            transform: translateY(-5px);
+        }
+        .loan-header {
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
+            justify-content: space-between;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--primary-color);
         }
-
         .amount-display {
             font-size: 1.8rem;
             font-weight: bold;
-            color: #2ecc71;
+            color: #28a745;
         }
-
+        .paid-display {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .indebt-display {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #dc3545;
+        }
         .detail-item {
-            border-left: 3px solid var(--secondary-color);
-            padding-left: 1rem;
-            margin: 1.2rem 0;
+            background: var(--accent-color);
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 0.5rem 0;
         }
-
         .help-section {
-            background-color: var(--light-bg);
+            background-color: #fff;
             border-radius: 15px;
             padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
             margin-top: 2rem;
-        }
-
-        @media (max-width: 768px) {
-            body {
-                background-size: 70%;
-                background-position: right 40px bottom 40px;
-            }
         }
     </style>
 </head>
-<body class="bg-light">
+<body>
 
 <div class="container mt-4">
     <div class="row justify-content-center">
         <div class="col-lg-8">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="text-primary mb-0"><i class="fas fa-hand-holding-usd me-2"></i>Loan Portfolio</h2>
-                <span class="info-badge bg-primary text-white px-3 py-1 rounded-pill">
-                    Customer ID: <?= htmlspecialchars($customer_id) ?>
-                </span>
+            <div class="loan-header">
+                <h2 class="text-primary"><i class="fas fa-hand-holding-usd me-2"></i> Loan Portfolio</h2>
+                <span class="badge bg-primary px-3 py-2">Customer ID: <?php echo htmlspecialchars($customer_id); ?></span>
             </div>
-
-            <?php if (!$loans): ?>
-                <div class="loan-card text-center">
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        No active loans found
+            
+            <form method="POST">
+                <?php foreach ($loans as $loan): ?>
+                <div class="loan-card mt-4">
+                    <h4 class="mb-3">Loan ID: <?php echo htmlspecialchars($loan['loan_id']); ?></h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="detail-item">
+                                <h6 class="text-muted mb-1">Loan Type</h6>
+                                <h5 class="text-dark"><?php echo htmlspecialchars($loan['loan_type']); ?></h5>
+                            </div>
+                            <div class="detail-item">
+                                <h6 class="text-muted mb-1">Sanction Date</h6>
+                                <h5 class="text-dark"><?php echo htmlspecialchars($loan['sanction_date']); ?></h5>
+                            </div>
+                            <div class="detail-item">
+                                <h6 class="text-muted mb-1">Amount Paid</h6>
+                                <div class="paid-display">₹<?php echo number_format($loan['paid'], 2); ?></div>
+                            </div>
+                            <div class="detail-item">
+                                <h6 class="text-muted mb-1">Update Amount Paid</h6>
+                                <input type="number" step="0.01" name="loans[<?php echo $loan['loan_id']; ?>][paid]" value="<?php echo number_format($loan['paid'], 2); ?>" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-item">
+                                <h6 class="text-muted mb-1">Loan Amount</h6>
+                                <div class="amount-display">₹<?php echo number_format($loan['loan_amount'], 2); ?></div>
+                            </div>
+                            <div class="detail-item">
+                                <h6 class="text-muted mb-1">Sanctioned By</h6>
+                                <h5 class="text-dark"><?php echo htmlspecialchars($loan['employee_name']); ?></h5>
+                            </div>
+                            <div class="detail-item">
+                                <h6 class="text-muted mb-1">Remaining Debt</h6>
+                                <div class="indebt-display">₹<?php echo number_format($loan['indebt'], 2); ?></div>
+                            </div>
+                            <div class="detail-item">
+        <h6 class="text-muted mb-1">Remaining Debt</h6>
+        <div class="indebt-display">₹<?php echo number_format($loan['indebt'], 2); ?></div>
+                        </div>
                     </div>
                 </div>
-            <?php else: ?>
-                <?php foreach ($loans as $loan): ?>
-                    <div class="loan-card">
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="loan-icon">
-                                <i class="fas fa-file-invoice-dollar"></i>
-                            </div>
-                            <h4 class="mb-0 ms-3">Loan ID: <?= $loan['loan_id'] ?></h4>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="detail-item">
-                                    <h6 class="text-muted mb-2"><i class="fas fa-tags me-2"></i>Loan Type</h6>
-                                    <h5 class="text-dark"><?= $loan['loan_type'] ?></h5>
-                                </div>
-                                
-                                <?php if (isset($loan['sanction_date'])): ?>
-                                <div class="detail-item">
-                                    <h6 class="text-muted mb-2"><i class="fas fa-calendar me-2"></i>Sanction Date</h6>
-                                    <h5 class="text-dark"><?= date('d M Y', strtotime($loan['sanction_date'])) ?></h5>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <div class="detail-item">
-                                    <h6 class="text-muted mb-2"><i class="fas fa-rupee-sign me-2"></i>Loan Amount</h6>
-                                    <div class="amount-display">₹<?= number_format($loan['loan_amount'], 2) ?></div>
-                                </div>
-                                
-                                <div class="detail-item">
-                                    <h6 class="text-muted mb-2"><i class="fas fa-user-tie me-2"></i>Sanctioned By</h6>
-                                    <h5 class="text-dark"><?= $loan['employee_name'] ?></h5>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 <?php endforeach; ?>
-            <?php endif; ?>
 
-            <div class="help-section">
-                <h4 class="text-primary mb-3"><i class="fas fa-question-circle me-2"></i>Need Help?</h4>
-                <p>For loan-related queries and assistance, please contact our loan department:</p>
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-primary">Update Loan Details</button>
+                </div>
+            </form>
+            
+            <div class="help-section mt-4">
+                <h4 class="text-primary mb-3"><i class="fas fa-question-circle me-2"></i> Need Help?</h4>
+                <p>For loan-related queries, contact our loan department:</p>
                 <div class="alert alert-info">
                     <i class="fas fa-phone-alt me-2"></i>
                     <strong>Loan Helpline:</strong> +91 9188835621
